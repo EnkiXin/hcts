@@ -129,25 +129,15 @@ class HyperbolicGraphHyperbolicContrastive(nn.Module):
         return neg_g
 
     def graph_sample(self,overlap_user_id):
-        # 为source和target分别生成一个negative graph
-        # 在source_g和target_g中，为每个overlapped节点采样1条边
-        # 在source_g上，为每个overlapped user，sample出一个item，作为正样本
-
-
-        # sample_neighbors：从source_g上sample边，为overlap_user_id来sample，每个节点sample一条边
         sampled_source_pos_g = dgl.sampling.sample_neighbors(self.source_g,
                                                            overlap_user_id,
                                                            1,
                                                            edge_dir = 'out')
 
-        # 在target_g上，为每个overlapped user，sample出一个item，作为正样本
         sampled_target_pos_g = dgl.sampling.sample_neighbors(self.target_g,
                                                            overlap_user_id,
                                                            1,
                                                            edge_dir = 'out')
-
-
-        # 在neg_source_g和neg_target_g中，为每个overlapped节点采样10条边
         sampled_source_neg_g = dgl.sampling.sample_neighbors(self.source_neg_g,
                                                            overlap_user_id,
                                                            self.num_neg_samples,
@@ -169,35 +159,24 @@ class HyperbolicGraphHyperbolicContrastive(nn.Module):
                                                              self.num_neg_samples,
                                                              edge_dir='out')
 
-        # source_graph中的overlapped_users的id
         source_pos_u_id = sampled_source_pos_g.edges()[0]
-        # source_graph中overlapeed_users的邻居的id
         source_pos_i_id = sampled_source_pos_g.edges()[1]
-        # target_graph中的overlapped_users的id
         target_pos_u_id = sampled_target_pos_g.edges()[0]
-        # target_graph中overlaped_users的邻居的id
         target_pos_i_id = sampled_target_pos_g.edges()[1]
         source_neg_u_id = sampled_source_neg_g.edges()[0]
         source_neg_i_id = sampled_source_neg_g.edges()[1]
         target_neg_u_id = sampled_target_neg_g.edges()[0]
         target_neg_i_id = sampled_target_neg_g.edges()[1]
-
         source_i_i_neg_id_u = sampled_source_i_i_pos_g.edges()[0]
         source_i_i_neg_id=sampled_source_i_i_pos_g.edges()[1]
         target_i_i_neg_id_u = sampled_target_i_i_pos_g.edges()[0]
         target_i_i_neg_id = sampled_target_i_i_pos_g.edges()[1]
-
         source_pos_u_id,source_pos_i_id=self.graph_id2inter_id(source_pos_u_id,source_pos_i_id, 'source')
         source_neg_u_id,source_neg_i_id=self.graph_id2inter_id(source_neg_u_id,source_neg_i_id, 'source')
         target_pos_u_id,target_pos_i_id=self.graph_id2inter_id(target_pos_u_id,target_pos_i_id, 'target')
         target_neg_u_id,target_neg_i_id=self.graph_id2inter_id(target_neg_u_id,target_neg_i_id, 'target')
         _,source_i_i_neg_id=self.graph_id2inter_id(source_i_i_neg_id_u,source_i_i_neg_id, 'source')
         _,target_i_i_neg_id=self.graph_id2inter_id(target_i_i_neg_id_u,target_i_i_neg_id, 'source')
-
-
-
-        # source_pos_u_id,source_pos_i_id：source graph上sample出来的边
-        # source_neg_u_id,source_neg_i_id：neg source graph上sample出来的边
         return source_pos_u_id,source_pos_i_id,source_neg_u_id,source_neg_i_id,target_pos_u_id,target_pos_i_id,target_neg_u_id,target_neg_i_id,source_i_i_neg_id,target_i_i_neg_id
 
     def get_dist_matrix(self,
@@ -207,18 +186,10 @@ class HyperbolicGraphHyperbolicContrastive(nn.Module):
                         neg_a,
                         neg_b,
                         domain):
-        # pos_a和pos_b是同维度的embeddings，需要拉近而这距离；neg_a，neg_b也是同纬度，要推远neg_a，neg_b的距离。
-        # domain：在哪个domain的双曲空间进行对比学习
         if domain == 'source':
-        # 这时，是将source_domain的embeddings与target_domain的item_embeddings进行对比学习
-        #   pos_dist = 2*torch.sigmoid(-self.manifold.hyper_dist(self.source_curve,pos_user_embeddings, pos_item_embeddings))/temp
             pos_dist = 2*torch.sigmoid(-self.manifold.hyper_dist(self.source_curve,pos_a, pos_b))/temp
             neg_dist = 2*torch.sigmoid(-self.manifold.hyper_dist(self.source_curve,neg_a, neg_b))/temp
-
-
-
         else:
-        # 这时，是将target_domain的embeddings与source_domain的item_embeddings进行对比学习
             pos_dist = 2*torch.sigmoid(-self.manifold.hyper_dist(self.target_curve,pos_a, pos_b))/temp
             neg_dist = 2*torch.sigmoid(-self.manifold.hyper_dist(self.target_curve,neg_a, neg_b))/temp
         pos_dist=pos_dist.view(-1, 1)
@@ -234,15 +205,10 @@ class HyperbolicGraphHyperbolicContrastive(nn.Module):
     def mask_correlated_samples2(self, labels_dis):
         mask =torch.tensor(labels_dis,dtype=bool,device=labels_dis.device)
         return mask
-
-
-    # 给两个domain的overlapped user的embeddings，同一个user两个domain的embedding，距离拉近；不同user
     def u_u_hyperbolic_cts_loss(self, z_i, z_j, c, temp):
         len = z_i.shape[0]
-        # 向量之间两两计算距离
         hyper_dist = 2*torch.sigmoid(-self.manifold.matrix_sqdist(z_i,z_j,c)/temp)
         # hyper_dist = -self.manifold.matrix_sqdist(z_i, z_j, c) / temp
-        # 将向量自己与自己的距离mask掉
         labels_dis = torch.eye(hyper_dist.size(0), device=hyper_dist.device)
         filter_hyper_dist= hyper_dist
         mask1 = self.mask_correlated_samples1(labels_dis)
@@ -254,21 +220,13 @@ class HyperbolicGraphHyperbolicContrastive(nn.Module):
         loss = self.ce_loss(logits, labels)
         return loss
 
-
-
-
-    # 下面，输入进来的embeddings是已经进行了manifold alignment的向量
     def u_i_hyperbolic_cts_loss(self,
                                 user_all_embeddings,
                                 item_all_embeddings,
                                 overlap_user_id,
                                 temp,
                                 way):
-        # 输入：user_embedding,item_embedding,overlap_id,temp,way
-        # 从overlapped user去sample其正负样本
-
         source_pos_u_id,source_pos_i_id, source_neg_u_id, source_neg_i_id, target_pos_u_id, target_pos_i_id, target_neg_u_id, target_neg_i_id,_,_ = self.graph_sample(overlap_user_id-1)
-
         if way=='su-ti':
            pos_u_embeddings = user_all_embeddings[source_pos_u_id]
            pos_i_embeddings = item_all_embeddings[target_pos_i_id]
@@ -323,22 +281,9 @@ class HyperbolicGraphHyperbolicContrastive(nn.Module):
                                 overlap_user_id,
                                 temp,
                                 way):
-        # 输入：user_embedding,item_embedding,overlap_id,temp,way
-        # 从overlapped user去sample其正负样本
-
         source_pos_u_id, source_pos_i_id, source_neg_u_id, source_neg_i_id, target_pos_u_id, target_pos_i_id, target_neg_u_id, target_neg_i_id ,source_i_i_neg_id,target_i_i_neg_id= self.graph_sample(
             overlap_user_id - 1)
-
-
-
-
-
-
-
-
-
         if way == 'si-ti':
-
             source_i_i_neg_id=source_pos_i_id.repeat_interleave(self.config['num_neg_samples'])
             pos_a_embeddings = source_i_all_embeddings[source_pos_i_id]
             pos_b_embeddings = target_i_all_embeddings[target_pos_i_id]
@@ -368,13 +313,10 @@ class HyperbolicGraphHyperbolicContrastive(nn.Module):
         return loss
 
     def _concat_and_remove_duplicates(self,tensor1, tensor2):
-        # 将两个张量拼接在一起
         concatenated_tensor = torch.cat((tensor1, tensor2))
-        # 使用unique函数去掉重复元素
         unique_tensor, _ = torch.unique(concatenated_tensor, sorted=True, return_inverse=True)
         return unique_tensor
-
-
+        
     def transfer_source_to_target(self,
                                   s_t_user_embeddings,
                                   s_t_item_embeddings,
@@ -383,14 +325,10 @@ class HyperbolicGraphHyperbolicContrastive(nn.Module):
                                   overlap_user_id,
                                   curve,
                                   temp):
-
         if self.config['u_u_cts']:
            u_u_loss=self.u_u_hyperbolic_cts_loss(s_t_user_embeddings[overlap_user_id],t_t_user_embeddings[overlap_user_id],curve,temp)
         else:
             u_u_loss=0
-
-        # 从source的user传递给target的item
-        # 输入：user_embedding,item_embedding,overlap_id,curve,temp,way
         if self.config['u_i_cts']:
            u_i_loss=self.u_i_hyperbolic_cts_loss(s_t_user_embeddings,t_t_item_embeddings,overlap_user_id,temp,'su-ti')
         else:
@@ -450,8 +388,7 @@ class HyperbolicGraphHyperbolicContrastive(nn.Module):
                 batch_source_i,
                 batch_target_u,
                 batch_target_i):
-        # batch_source_u，batch_target_u:输入进来一个batch的user，overlap的部分，下面将两个部分取并集，即两个domain一个batch的全部overlap user
-        # 将这部分overlapped user取并集，然后去掉重复的
+
         overlap_user_id=self._concat_and_remove_duplicates(batch_source_u[batch_source_u<self.num_lapped_users],batch_target_u[batch_target_u<self.num_lapped_users])
 
 
