@@ -19,10 +19,6 @@ from recbole.utils import init_logger, init_seed, set_color
 
 
 class HCTS(CrossDomainRecommender):
-    r"""BiTGCF uses feature propagation and feature transfer to achieve bidirectional
-        knowledge transfer between the two domains.
-        We extend the basic BiTGCF model in a symmetrical way to support those datasets that have overlapped items.
-    """
     input_type = InputType.POINTWISE
 
     def __init__(self, config, dataset):
