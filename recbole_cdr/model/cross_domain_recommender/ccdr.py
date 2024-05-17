@@ -10,10 +10,6 @@ from hyperbolic_gnn.model.hgcn.layers.gnn import GAT,GATv2
 from hyperbolic_gnn.model.hgcn.layers.hyperbolic_contrastive_learning import HyperbolicGraphHyperbolicContrastive
 
 class CCDR(CrossDomainRecommender):
-    r"""BiTGCF uses feature propagation and feature transfer to achieve bidirectional
-        knowledge transfer between the two domains.
-        We extend the basic BiTGCF model in a symmetrical way to support those datasets that have overlapped items.
-    """
     input_type = InputType.POINTWISE
 
     def __init__(self, config, dataset):
