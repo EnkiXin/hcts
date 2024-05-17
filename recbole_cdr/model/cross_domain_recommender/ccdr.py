@@ -7,7 +7,7 @@ from recbole.model.init import xavier_normal_initialization
 from recbole.model.loss import EmbLoss
 from recbole.utils import InputType
 from hyperbolic_gnn.model.hgcn.layers.gnn import GAT,GATv2
-from hyperbolic_gnn.model.hgcn.layers.hyperbolic_contrastive_learning import HyperbolicGraphHyperbolicContrastive
+from hyperbolic_gnn.model.hgcn.layers.euclidean_contrastive_learning import EuclideanGraphContrastive
 
 class CCDR(CrossDomainRecommender):
     input_type = InputType.POINTWISE
@@ -82,7 +82,7 @@ class CCDR(CrossDomainRecommender):
             dst=torch.cat((self.source_i, torch.tensor([torch.max(self.source_i)])), dim=0) + max(
                 self.source_u) + 1,
         )
-        self.hyperbolic_contrastive_learning=HyperbolicGraphHyperbolicContrastive(latent_dim=self.latent_dim,
+        self.contrastive_learning=EuclideanGraphContrastive(latent_dim=self.latent_dim,
                                                                                   num_lapped_users=self.overlapped_num_users,
                                                                                   temp=self.temp,
                                                                                   cts_lamda=self.cts_lamda,
@@ -199,7 +199,7 @@ class CCDR(CrossDomainRecommender):
         target_reg_loss = self.reg_loss(u_ego_embeddings, i_ego_embeddings)
         target_loss = target_bce_loss + self.reg_weight * target_reg_loss
         losses.append(target_loss)
-        cts_loss=self.hyperbolic_contrastive_learning(source_user_all_embeddings,source_item_all_embeddings,target_user_all_embeddings,target_item_all_embeddings,source_user,source_item,target_user,target_item)
+        cts_loss=self.contrastive_learning(source_user_all_embeddings,source_item_all_embeddings,target_user_all_embeddings,target_item_all_embeddings,source_user,source_item,target_user,target_item)
         losses.append(cts_loss)
         return tuple(losses)
 
