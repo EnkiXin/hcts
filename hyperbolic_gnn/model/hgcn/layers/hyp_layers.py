@@ -54,7 +54,6 @@ class HypLinear(nn.Module):
 
     def forward(self, x):
         drop_weight = F.dropout(self.weight, 0.2,training=True)
-        # 将在曲率为c_in的x映射到tangent space做矩阵乘法，然后映射到曲率为c_out的空间
         mv = self.manifold.multi_curve_mobius_matvec(drop_weight, x, self.c_in,self.c_out)
         res = self.manifold.proj(mv, self.c_out)
         bias = self.manifold.proj_tan0(self.bias.view(1, -1), self.c_out)
@@ -62,12 +61,8 @@ class HypLinear(nn.Module):
         hyp_bias = self.manifold.proj(hyp_bias, self.c_out)
         res = self.manifold.mobius_add(res, hyp_bias, c=self.c_out)
         res = self.manifold.proj(res, self.c_out)
-
         return res
-
-
-
-
+        
 class LorentzLinear(nn.Module):
     def __init__(self,
                  in_features,
@@ -105,9 +100,6 @@ class LorentzLinear(nn.Module):
                 self.weight.weight[:, idx] = 0
         if self.bias:
             nn.init.constant_(self.weight.bias, 0)
-
-
-
 
 
 class HypAct(Module):
