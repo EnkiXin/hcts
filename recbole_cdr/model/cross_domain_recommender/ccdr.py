@@ -7,7 +7,7 @@ from recbole.model.init import xavier_normal_initialization
 from recbole.model.loss import EmbLoss
 from recbole.utils import InputType
 from hyperbolic_gnn.model.hgcn.layers.gnn import GAT,GATv2
-from hyperbolic_gnn.model.hgcn.layers.euclidean_contrastive_learning import EuclideanGraphContrastive
+from hyperbolic_gnn.model.hgcn.layers.euclidean_contrastive_learning import GraphContrastive
 
 class CCDR(CrossDomainRecommender):
     input_type = InputType.POINTWISE
