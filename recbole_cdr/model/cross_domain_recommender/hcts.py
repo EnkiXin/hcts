@@ -52,10 +52,6 @@ class HCTS(CrossDomainRecommender):
         self.ireg_lambda=config['ireg_lambda']
         self.ireg=config['ireg']
         self.activation = lambda x: x
-
-
-        # total_num_users和total_num_items的数量比真实的数量多1，0号embedding是假的
-        # source+target全部的user个数：total_num_users
         self.source_user_embedding = torch.nn.Embedding(num_embeddings=self.total_num_users, embedding_dim=self.latent_dim)
         self.source_user_embedding.state_dict()['weight'].uniform_(-config['scale'], config['scale'])
 
@@ -72,15 +68,12 @@ class HCTS(CrossDomainRecommender):
         self.conv=config['conv']
 
         self.loss = nn.CrossEntropyLoss()
-        # 固定住不需要的部分
         with torch.no_grad():
-            # 第一部分：overlapped user+第二部分：没有overlapped的target user+第三部分：没有overlapped的source user
             # overlapped_num_users：两边都有的user的个数
             self.source_user_embedding.weight[self.overlapped_num_users: self.target_num_users].fill_(0)
             self.source_item_embedding.weight[self.overlapped_num_items: self.target_num_items].fill_(0)
             self.target_user_embedding.weight[self.target_num_users:].fill_(0)
             self.target_item_embedding.weight[self.target_num_items:].fill_(0)
-        # 下面两个邻接矩阵是一整个图
         self.source_interaction_matrix = dataset.inter_matrix(form='coo', value_field=None, domain='source').astype(np.float32)
         self.target_interaction_matrix = dataset.inter_matrix(form='coo', value_field=None, domain='target').astype(np.float32)
         self.source_norm_adj_matrix = self.get_norm_adj_mat(self.source_interaction_matrix, self.total_num_users,self.total_num_items).to(self.device)
@@ -94,16 +87,10 @@ class HCTS(CrossDomainRecommender):
         self.t2t_linear=HypLinear(self.manifold,self.latent_dim,self.latent_dim,self.target_curve,self.target_curve)
         self.s2s_linear=HypLinear(self.manifold,self.latent_dim,self.latent_dim,self.source_curve,self.source_curve)
         self.num_neg_samples=config['num_neg_samples']
-
-        # storage variables for full sort evaluation acceleration
         self.target_restore_user_e = None
         self.target_restore_item_e = None
-        # parameters initialization
         self.apply(xavier_normal_initialization)
         self.other_parameter_name = ['target_restore_user_e', 'target_restore_item_e']
-        # q：source到target
-        # k：target到target
-        # v：target到target
         self.source_user_degree_count = torch.from_numpy(self.source_interaction_matrix.sum(axis=1)).to(self.device)
         self.target_user_degree_count = torch.from_numpy(self.target_interaction_matrix.sum(axis=1)).to(self.device)
         self.source_item_degree_count = torch.from_numpy(self.source_interaction_matrix.sum(axis=0)).transpose(0, 1).to(self.device)
@@ -179,8 +166,6 @@ class HCTS(CrossDomainRecommender):
                                                          num_layers=self.n_layers,
                                                          manifold=self.manifold,
                                                          curve=self.source_curve)
-
-        # 初始化时的变量source_u，source_i,target_u,target_i是整个interactions中两个interaction图的节点
         self.hyperbolic_contrastive_learning=HyperbolicGraphHyperbolicContrastive(latent_dim=self.latent_dim,
                                                                                   source_curve=self.source_curve,
                                                                                   target_curve=self.target_curve,
@@ -202,8 +187,6 @@ class HCTS(CrossDomainRecommender):
           c=self.source_curve
         else:
             c=self.target_curve
-
-
         embeddings_tan = self.manifold.logmap0(embeddings, c)
         # centering has been achieved before
         tangent_mean_norm = (1e-6 + embeddings_tan.pow(2).sum(dim=1).mean())
@@ -255,8 +238,6 @@ class HCTS(CrossDomainRecommender):
         target_all_embeddings, target_norm_adj_matrix = self.get_ego_embeddings(domain='target')
         source_all_embeddings=self.manifold.proj(self.manifold.expmap0(source_all_embeddings, self.source_curve),self.source_curve)
         target_all_embeddings=self.manifold.proj(self.manifold.expmap0(target_all_embeddings, self.target_curve),self.target_curve)
-
-        # 原本是在双曲空间上，在gnn中的操作是先映射回欧氏空间，然后做聚合
         if self.conv=='skip':
             source_all_embeddings = self.source_gnn(source_all_embeddings,source_norm_adj_matrix)
             target_all_embeddings = self.target_gnn(target_all_embeddings,target_norm_adj_matrix)
@@ -328,25 +309,17 @@ class HCTS(CrossDomainRecommender):
     def calculate_loss(self, interaction):
         self.get_visualization_data()
         self.init_restore_e()
-        # forward是先过一个图神经网络，这里是将整个图直接处理一遍，然后得到所有user，item的embeddings
         source_user_all_embeddings, source_item_all_embeddings, target_user_all_embeddings, target_item_all_embeddings,source_structure_loss,target_structure_loss = self.forward()
         
         losses = []
-        # 取出每个iteraction（伯乐的mini-batch）的user和item的ID
         source_user = interaction[self.SOURCE_USER_ID]
         source_item = interaction[self.SOURCE_ITEM_ID]
-        # 在source中随机采样一个item作为训练的负样本
         source_neg_item = self.generate_negative_samples(self.total_num_items,source_item,'source')
         source_label = interaction[self.SOURCE_LABEL]
         target_user = interaction[self.TARGET_USER_ID]
         target_item = interaction[self.TARGET_ITEM_ID]
-        # 在target中随机采样一个item作为训练的负样本
         target_neg_item=self.generate_negative_samples(self.total_num_items,target_item,'target')
-        # 根据评分来给label，rating在阈值以下的为0，以上的为1
-        # 训练跟message passing边不一样的问题
         target_label = interaction[self.TARGET_LABEL]
-        # 从forward中取出每个user，item的embedding，这里是经过HGCF以后的user和item的embedding
-
         source_u_embeddings = source_user_all_embeddings[source_user]
         source_i_embeddings = source_item_all_embeddings[source_item]
         source_neg_i_embeddings = source_item_all_embeddings[source_neg_item]
@@ -358,8 +331,6 @@ class HCTS(CrossDomainRecommender):
         losses.append(source_loss)
         target_loss=self.target_decode(target_u_embeddings, target_i_embeddings, target_neg_i_embeddings, target_label)
         losses.append(target_loss)
-        # 输入到cts的东西：source_user_all_embeddings是source_user全部的embeddings（包括target中不需要的部分），另外几个embeddings意义相同
-        # source_user：一个batch中，source user的id，后面四个分别是一个batch的source_item,target_user,target_item
 
 
         if (self.config['s_t_transfer'] == False) & (self.config['t_s_transfer'] == False):
