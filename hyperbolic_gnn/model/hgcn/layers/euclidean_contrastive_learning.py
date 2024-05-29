@@ -5,7 +5,7 @@ import dgl
 import numpy as np
 import random
 dgl.seed(2023)
-class HyperbolicGraphHyperbolicContrastive(nn.Module):
+class GraphContrastive(nn.Module):
     """
     HCTS
     """
@@ -21,7 +21,7 @@ class HyperbolicGraphHyperbolicContrastive(nn.Module):
                  num_neg_samples,
                  config
                  ):
-        super(HyperbolicGraphHyperbolicContrastive, self).__init__()
+        super(GraphContrastive, self).__init__()
         dgl.seed(config['seed'])
         self.latent_dim = latent_dim
 
